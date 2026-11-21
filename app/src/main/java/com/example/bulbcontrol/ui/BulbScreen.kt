@@ -35,7 +35,13 @@ import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -96,6 +102,9 @@ fun BulbScreen(link: LinkState, light: LightState, demoMode: Boolean, actions: B
                 }
             }
             item { ControlsCard(light, enabled = link.status == LinkStatus.Connected, actions) }
+            if (link.log.isNotEmpty()) {
+                item { LogCard(link.log) }
+            }
             link.lastSent?.let { hex ->
                 item {
                     Text(
@@ -142,6 +151,7 @@ private fun ConnectionCard(link: LinkState, actions: BulbActions) {
                         Spacer(Modifier.width(12.dp))
                         Text("Connecting to ${link.deviceName}...", style = MaterialTheme.typography.titleMedium)
                     }
+                    link.detail?.let { Text(it, style = MaterialTheme.typography.bodyMedium) }
                     OutlinedButton(onClick = actions.onDisconnect) { Text("Cancel") }
                 }
                 LinkStatus.Connected -> {
@@ -154,6 +164,30 @@ private fun ConnectionCard(link: LinkState, actions: BulbActions) {
             }
             link.error?.let {
                 Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodyMedium)
+            }
+        }
+    }
+}
+
+@Composable
+private fun LogCard(lines: List<String>) {
+    var expanded by rememberSaveable { mutableStateOf(false) }
+    val clipboard = LocalClipboardManager.current
+    Card(Modifier.fillMaxWidth()) {
+        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text("Details", style = MaterialTheme.typography.titleSmall, modifier = Modifier.weight(1f))
+                TextButton(onClick = { clipboard.setText(AnnotatedString(lines.joinToString("\n"))) }) {
+                    Text("Copy")
+                }
+                TextButton(onClick = { expanded = !expanded }) { Text(if (expanded) "Hide" else "Show") }
+            }
+            if (expanded) {
+                Text(
+                    lines.joinToString("\n"),
+                    style = MaterialTheme.typography.bodySmall,
+                    fontFamily = FontFamily.Monospace,
+                )
             }
         }
     }

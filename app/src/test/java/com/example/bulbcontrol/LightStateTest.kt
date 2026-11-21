@@ -31,3 +31,19 @@ class LightStateTest {
         assertEquals(BulbCommand.White(255), state.colorCommand())
     }
 }
+
+class RgbToHsvTest {
+    @Test
+    fun round_trips_with_hsvToRgb() {
+        val (h, s, v) = com.example.bulbcontrol.ble.mesh.rgbToHsv(255, 128, 0)
+        assertEquals(Triple(255, 128, 0), hsvToRgb(h, s, v))
+    }
+
+    @Test
+    fun pure_blue() {
+        val (h, s, v) = com.example.bulbcontrol.ble.mesh.rgbToHsv(0, 0, 255)
+        assertEquals(240f, h, 0.01f)
+        assertEquals(1f, s, 0.001f)
+        assertEquals(1f, v, 0.001f)
+    }
+}

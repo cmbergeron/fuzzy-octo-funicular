@@ -10,6 +10,13 @@ which one your bulb uses after it connects:
 |---|---|---|
 | Triones / Magic Blue | Happy Lighting, Magic Blue, LEDBLE, Triones, iLight | `FFD5/FFD9` or `FFE5/FFE9` |
 | ELK-BLEDOM | Lotus Lamp, duoCo Strip, ELK-BLEDOM | `FFF0/FFF3` |
+| Standard Bluetooth Mesh | Sylvania / LEDVANCE and other SIG Mesh bulbs | `1827` (new) / `1828` (set up) |
+
+**Bluetooth Mesh bulbs (e.g. Sylvania):** the first time you connect, the app adds the
+bulb to its own encrypted mesh network (keys are stored on the phone). After that the
+bulb belongs to this app, and the manufacturer's app can't control it until you
+factory-reset the bulb. A bulb already set up in another app must be factory-reset
+before this app can use it. The app's **Details** card shows each setup step.
 
 If your bulb isn't one of these, see [Adding your bulb](#adding-your-bulb).
 

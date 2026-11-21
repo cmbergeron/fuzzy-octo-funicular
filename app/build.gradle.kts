@@ -49,6 +49,8 @@ dependencies {
     implementation("androidx.compose.ui:ui")
     implementation("androidx.compose.ui:ui-tooling-preview")
     implementation("androidx.compose.material3:material3")
+    // Standard Bluetooth Mesh (Sylvania/LEDVANCE and others): provisioning + encryption
+    implementation("no.nordicsemi.android:mesh:3.3.9")
     debugImplementation("androidx.compose.ui:ui-tooling")
 
     // Unit tests (run on your computer's JVM, no phone needed)

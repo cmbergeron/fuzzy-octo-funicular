@@ -15,6 +15,10 @@ data class LinkState(
     /** Hex of the last bytes written to the bulb, handy for debugging. */
     val lastSent: String? = null,
     val error: String? = null,
+    /** Extra progress text, e.g. during first-time mesh setup. */
+    val detail: String? = null,
+    /** Recent diagnostic lines, newest last. */
+    val log: List<String> = emptyList(),
 )
 
 /** Something that can find and drive a bulb: real Bluetooth, or the demo fake. */
