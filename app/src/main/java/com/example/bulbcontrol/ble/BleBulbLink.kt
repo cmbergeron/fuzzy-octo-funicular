@@ -19,6 +19,7 @@ import android.os.Handler
 import android.os.Looper
 import android.os.ParcelUuid
 import android.util.Log
+import com.example.bulbcontrol.CrashReporter
 import com.example.bulbcontrol.ble.mesh.MeshController
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -297,7 +298,7 @@ class BleBulbLink(context: Context) : BulbLink {
     private fun onNotification(g: BluetoothGatt, characteristic: BluetoothGattCharacteristic, value: ByteArray) {
         if (g != gatt) return
         val d = driver as? Driver.Mesh ?: return
-        if (characteristic.uuid == d.dataOut.uuid) mesh.handleNotification(value)
+        if (characteristic.uuid == d.dataOut.uuid) guardMesh("reading reply") { mesh.handleNotification(value) }
     }
 
     private fun chooseDriver(g: BluetoothGatt) {
@@ -321,20 +322,20 @@ class BleBulbLink(context: Context) : BulbLink {
         val proxyIn = proxy?.getCharacteristic(MESH_PROXY_DATA_IN)
         val proxyOut = proxy?.getCharacteristic(MESH_PROXY_DATA_OUT)
 
-        if (proxyIn != null && proxyOut != null && (mesh.isOurs(address) || provIn == null)) {
+        if (prov != null || proxy != null) {
+            // First use of the mesh library: if it can't start, show why instead of crashing.
+            guardMesh("starting mesh library") { mesh } ?: return
+        }
+        if (proxyIn != null && proxyOut != null && (provIn == null || mesh.isOurs(address))) {
             log("Bluetooth Mesh bulb (proxy)")
             driver = Driver.Mesh(proxyIn, proxyOut)
             _state.update { it.copy(protocolName = "Bluetooth Mesh", detail = "Connecting to mesh...") }
             ops.addLast(GattOp.EnableNotifications(proxyOut))
             pump()
-            mesh.startProxy(address)
+            guardMesh("starting mesh") { mesh.startProxy(address) }
             return
         }
         if (provIn != null && provOut != null) {
-            if (mesh.isOurs(address)) {
-                // We provisioned it before but it's advertising as new again: it was reset.
-                log("Bulb was reset since last setup; setting it up again")
-            }
             log("Bluetooth Mesh bulb (not set up yet)")
             driver = Driver.Mesh(provIn, provOut)
             _state.update { it.copy(protocolName = "Bluetooth Mesh") }
@@ -344,7 +345,7 @@ class BleBulbLink(context: Context) : BulbLink {
                 ?.takeIf { it.size >= 16 }
                 ?.let { data -> runCatching { uuidFromBytes(data) }.getOrNull() }
                 ?: UUID.randomUUID()
-            mesh.startProvisioning(address, uuid)
+            guardMesh("starting setup") { mesh.startProvisioning(address, uuid) }
             return
         }
 
@@ -439,7 +440,7 @@ class BleBulbLink(context: Context) : BulbLink {
         val op = currentOp
         currentOp = null
         main.removeCallbacks(opTimeout)
-        if (op is GattOp.Write && op.isMesh) mesh.handleWriteComplete(op.data)
+        if (op is GattOp.Write && op.isMesh) guardMesh("after write") { mesh.handleWriteComplete(op.data) }
         pump()
     }
 
@@ -473,7 +474,7 @@ class BleBulbLink(context: Context) : BulbLink {
                 if (!meshReady) return null
                 val command = pendingCommands.removeFirstOrNull() ?: return null
                 _state.update { it.copy(lastSent = "mesh: $command") }
-                mesh.send(command) // enqueues PDUs via meshHost.sendMeshPdu
+                guardMesh("sending command") { mesh.send(command) } // enqueues PDUs via meshHost.sendMeshPdu
                 ops.removeFirstOrNull()
             }
             null -> null
@@ -521,9 +522,23 @@ class BleBulbLink(context: Context) : BulbLink {
 
     private fun log(message: String) {
         Log.i(TAG, message)
+        CrashReporter.record(message)
         val line = "${timeFormat.format(Date())} $message"
         _state.update { it.copy(log = (it.log + line).takeLast(MAX_LOG_LINES)) }
     }
+
+    /** Runs mesh code; on any exception, shows it instead of crashing the app. */
+    private fun <T> guardMesh(step: String, block: () -> T): T? =
+        try {
+            block()
+        } catch (e: Throwable) {
+            Log.e(TAG, "Mesh error while $step", e)
+            log("ERROR while $step: $e")
+            e.stackTrace.take(6).forEach { log("    at $it") }
+            disconnect()
+            _state.update { it.copy(error = "Mesh error while $step: ${e.javaClass.simpleName}: ${e.message}") }
+            null
+        }
 
     private fun fail(message: String) {
         _state.update { it.copy(scanning = false, error = message) }

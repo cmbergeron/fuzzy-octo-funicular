@@ -19,7 +19,21 @@ import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.dynamicDarkColorScheme
 import androidx.compose.material3.dynamicLightColorScheme
 import androidx.compose.material3.lightColorScheme
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.unit.dp
 import androidx.compose.ui.platform.LocalContext
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -34,7 +48,7 @@ class MainActivity : ComponentActivity() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
             arrayOf(Manifest.permission.BLUETOOTH_SCAN, Manifest.permission.BLUETOOTH_CONNECT)
         } else {
-            arrayOf(Manifest.permission.ACCESS_FINE_LOCATION)
+            arrayOf(Manifest.permission.ACCESS_COARSE_LOCATION, Manifest.permission.ACCESS_FINE_LOCATION)
         }
 
     private val permissionLauncher =
@@ -53,6 +67,8 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        CrashReporter.install(this)
+        val lastCrash = CrashReporter.takeLastCrash(this)
         enableEdgeToEdge()
         setContent {
             val link by viewModel.linkState.collectAsStateWithLifecycle()
@@ -68,6 +84,28 @@ class MainActivity : ComponentActivity() {
                 else -> lightColorScheme()
             }
             MaterialTheme(colorScheme = colors) {
+                var crashText by remember { mutableStateOf(lastCrash) }
+                crashText?.let { text ->
+                    val clipboard = LocalClipboardManager.current
+                    AlertDialog(
+                        onDismissRequest = { crashText = null },
+                        title = { Text("The app crashed last time") },
+                        text = {
+                            Text(
+                                text,
+                                style = MaterialTheme.typography.bodySmall,
+                                fontFamily = FontFamily.Monospace,
+                                modifier = Modifier.heightIn(max = 400.dp).verticalScroll(rememberScrollState()),
+                            )
+                        },
+                        confirmButton = {
+                            TextButton(onClick = { clipboard.setText(AnnotatedString(text)) }) { Text("Copy") }
+                        },
+                        dismissButton = {
+                            TextButton(onClick = { crashText = null }) { Text("Close") }
+                        },
+                    )
+                }
                 BulbScreen(
                     link = link,
                     light = light,

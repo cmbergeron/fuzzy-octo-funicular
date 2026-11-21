@@ -78,7 +78,18 @@ class MeshController(context: Context, private val host: Host) :
         fun log(message: String)
     }
 
-    private val main = Handler(Looper.getMainLooper())
+    private val main = object : Handler(Looper.getMainLooper()) {
+        override fun dispatchMessage(msg: android.os.Message) {
+            try {
+                super.dispatchMessage(msg)
+            } catch (e: Throwable) {
+                Log.e(TAG, "Mesh callback failed", e)
+                host.log("ERROR: $e")
+                e.stackTrace.take(6).forEach { host.log("    at $it") }
+                host.onMeshFailed("Mesh error: ${e.javaClass.simpleName}: ${e.message}")
+            }
+        }
+    }
     private val prefs = context.getSharedPreferences("mesh_bulbs", Context.MODE_PRIVATE)
     private val api = MeshManagerApi(context.applicationContext)
     private var network: MeshNetwork? = null
@@ -124,7 +135,11 @@ class MeshController(context: Context, private val host: Host) :
         val net = network ?: return@whenLoaded host.onMeshFailed("Mesh network not loaded")
         val unicast = prefs.getInt(address, -1)
         val found = net.getNode(unicast)
-            ?: net.nodes.singleOrNull { it.unicastAddress != net.selectedProvisioner?.provisionerAddress }
+            ?: run {
+                // Bulb's Bluetooth address may have changed; fall back to the only bulb we set up.
+                val ours = prefs.all.values.filterIsInstance<Int>().toSet()
+                net.nodes.singleOrNull { it.unicastAddress in ours }
+            }
         if (found == null) {
             host.onMeshFailed(
                 "This bulb is already set up with another app (e.g. the Sylvania app). " +
